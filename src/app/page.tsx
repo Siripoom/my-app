@@ -11,7 +11,7 @@ export default function LoadingPage() {
     // หน่วงเวลา 2 วินาที แล้วเปลี่ยนไปหน้า home
     const timer = setTimeout(() => {
       router.push("/home");
-    }, 2000);
+    }, 1000);
 
     return () => clearTimeout(timer);
   }, [router]);
@@ -24,12 +24,6 @@ export default function LoadingPage() {
         </h1>
         <Spin size="large" className="mb-4" />
         <p className="text-lg text-gray-600">กำลังโหลด...</p>
-        <div className="mt-6 w-64 bg-gray-200 rounded-full h-1">
-          <div
-            className="bg-blue-500 h-1 rounded-full animate-pulse"
-            style={{ width: "60%" }}
-          ></div>
-        </div>
       </div>
     </div>
   );

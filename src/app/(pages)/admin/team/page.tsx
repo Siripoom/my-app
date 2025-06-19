@@ -363,13 +363,7 @@ export default function AdminTeamPage() {
         </Space>
       ),
     },
-    {
-      title: "วันที่เพิ่ม",
-      dataIndex: "created_at",
-      key: "created_at",
-      width: 120,
-      render: (date: string) => new Date(date).toLocaleDateString("th-TH"),
-    },
+
     {
       title: "การดำเนินการ",
       key: "actions",
