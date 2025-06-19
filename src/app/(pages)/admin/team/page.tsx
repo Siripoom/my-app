@@ -237,6 +237,7 @@ export default function AdminTeamPage() {
   const handleDelete = async (id: string, avatarUrl?: string) => {
     try {
       setLoading(true);
+      console.log(id);
       await deleteTeam(id);
 
       // Delete avatar if exists

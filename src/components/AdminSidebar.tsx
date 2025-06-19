@@ -9,6 +9,8 @@ import {
   DashboardOutlined,
   UserOutlined,
   SettingOutlined,
+  BankOutlined,
+  BulbOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 
@@ -27,6 +29,16 @@ const menuItems: MenuItem[] = [
     key: "/admin/team",
     icon: <TeamOutlined />,
     label: "จัดการทีมงาน",
+  },
+  {
+    key: "/admin/project",
+    icon: <BulbOutlined />,
+    label: "จัดการโปรเจค",
+  },
+  {
+    key: "/admin/finance",
+    icon: <BankOutlined />,
+    label: "จัดการการเงิน",
   },
   {
     key: "/admin/users",
