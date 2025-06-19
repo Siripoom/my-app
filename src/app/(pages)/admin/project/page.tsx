@@ -21,6 +21,8 @@ import {
   Typography,
   Descriptions,
   Alert,
+  Avatar,
+  Transfer,
 } from "antd";
 import {
   PlusOutlined,
@@ -34,6 +36,8 @@ import {
   CheckCircleOutlined,
   CalendarOutlined,
   ExclamationCircleOutlined,
+  UserOutlined,
+  TeamOutlined,
 } from "@ant-design/icons";
 import AdminLayout from "@/components/AdminLayout";
 import {
@@ -47,8 +51,11 @@ import {
   type Project,
   type ProjectFilters,
   type ProjectStats,
+  type ProjectWithTeamDetails,
 } from "@/services/projectService";
+import { getTeams, type Team } from "@/services/teamService";
 import type { ColumnsType } from "antd/es/table";
+import type { TransferDirection } from "antd/es/transfer";
 import dayjs from "dayjs";
 
 const { Search } = Input;
@@ -63,10 +70,18 @@ const statusConfig = {
   cancelled: { color: "error", label: "ยกเลิก" },
 };
 
+interface TransferItem {
+  key: string;
+  title: string;
+  description: string;
+  position: string;
+}
+
 export default function AdminProjectPage() {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectWithTeamDetails[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [stats, setStats] = useState<ProjectStats>({
     totalProjects: 0,
     todoProjects: 0,
@@ -74,13 +89,20 @@ export default function AdminProjectPage() {
     completedProjects: 0,
     cancelledProjects: 0,
   });
+  const [totalBudget, setTotalBudget] = useState(0);
   const [upcomingDeadlines, setUpcomingDeadlines] = useState<Project[]>([]);
 
   // Modal states
   const [modalVisible, setModalVisible] = useState(false);
   const [viewModalVisible, setViewModalVisible] = useState(false);
-  const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [viewingProject, setViewingProject] = useState<Project | null>(null);
+  const [editingProject, setEditingProject] =
+    useState<ProjectWithTeamDetails | null>(null);
+  const [viewingProject, setViewingProject] =
+    useState<ProjectWithTeamDetails | null>(null);
+
+  // Team selection states
+  const [transferData, setTransferData] = useState<TransferItem[]>([]);
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
 
   // Filter states
   const [searchText, setSearchText] = useState("");
@@ -106,6 +128,12 @@ export default function AdminProjectPage() {
 
       const result = await getProjects(filters);
       setProjects(result.data);
+      //summary buget
+      const totalBudget = result.data.reduce(
+        (sum, project) => sum + (parseFloat(project.budget) || 0),
+        0
+      );
+      setTotalBudget(totalBudget);
       setPagination((prev) => ({
         ...prev,
         total: result.count,
@@ -115,6 +143,25 @@ export default function AdminProjectPage() {
       console.error("Load projects error:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Load teams data
+  const loadTeams = async () => {
+    try {
+      const result = await getTeams({ limit: 100 }); // Get all teams
+      setTeams(result.data);
+
+      // Prepare transfer data
+      const transferItems: TransferItem[] = result.data.map((team) => ({
+        key: team.id!,
+        title: team.name,
+        description: team.position,
+        position: team.position,
+      }));
+      setTransferData(transferItems);
+    } catch (error) {
+      console.error("Load teams error:", error);
     }
   };
 
@@ -139,6 +186,7 @@ export default function AdminProjectPage() {
 
   useEffect(() => {
     loadDashboardData();
+    loadTeams();
   }, []);
 
   // Handle search
@@ -162,8 +210,13 @@ export default function AdminProjectPage() {
     }));
   };
 
+  // Handle team transfer
+  const handleTransferChange = (nextTargetKeys: string[]) => {
+    setSelectedTeamMembers(nextTargetKeys);
+  };
+
   // Open modal for create/edit
-  const openModal = (project?: Project) => {
+  const openModal = (project?: ProjectWithTeamDetails) => {
     setEditingProject(project || null);
     setModalVisible(true);
 
@@ -173,13 +226,15 @@ export default function AdminProjectPage() {
         start_date: project.start_date ? dayjs(project.start_date) : null,
         end_date: project.end_date ? dayjs(project.end_date) : null,
       });
+      setSelectedTeamMembers(project.team_members || []);
     } else {
       form.resetFields();
+      setSelectedTeamMembers([]);
     }
   };
 
   // Open view modal
-  const openViewModal = (project: Project) => {
+  const openViewModal = (project: ProjectWithTeamDetails) => {
     setViewingProject(project);
     setViewModalVisible(true);
   };
@@ -188,6 +243,7 @@ export default function AdminProjectPage() {
   const closeModal = () => {
     setModalVisible(false);
     setEditingProject(null);
+    setSelectedTeamMembers([]);
     form.resetFields();
   };
 
@@ -208,6 +264,7 @@ export default function AdminProjectPage() {
           ? values.start_date.format("YYYY-MM-DD")
           : null,
         end_date: values.end_date ? values.end_date.format("YYYY-MM-DD") : null,
+        team_members: selectedTeamMembers,
       };
 
       if (editingProject) {
@@ -245,43 +302,93 @@ export default function AdminProjectPage() {
     }
   };
 
+  // Render team members
+  const renderTeamMembers = (teamMembers: string[], teamDetails?: any[]) => {
+    if (!teamDetails || teamDetails.length === 0) {
+      return <Text type="secondary">-</Text>;
+    }
+
+    return (
+      <Avatar.Group maxCount={3} size="small">
+        {teamDetails.map((member) => (
+          <Tooltip
+            key={member.id}
+            title={`${member.name} (${member.position})`}
+          >
+            <Avatar
+              src={member.avatar_url}
+              icon={<UserOutlined />}
+              style={{ backgroundColor: "#87d068" }}
+            >
+              {!member.avatar_url && member.name?.charAt(0)}
+            </Avatar>
+          </Tooltip>
+        ))}
+      </Avatar.Group>
+    );
+  };
+
   // Table columns
-  const columns: ColumnsType<Project> = [
+  const columns: ColumnsType<ProjectWithTeamDetails> = [
     {
       title: "ชื่อโปรเจค",
       dataIndex: "name",
       key: "name",
       render: (name: string) => <Text strong>{name}</Text>,
+      filters: getUniqueStatuses().map((status) => ({
+        text: statusConfig[status as keyof typeof statusConfig].label,
+        value: status,
+      })),
+      onFilter: (value, record) => record.status === value,
+      sorter: (a, b) => a.name.localeCompare(b.name),
+      sortDirections: ["ascend", "descend"],
+    },
+    {
+      title: "งบประมาณ",
+      dataIndex: "budget",
+      key: "budget",
+      render: (budget: string) => <Text strong>{budget}</Text>,
+      filters: getUniqueStatuses().map((status) => ({
+        text: statusConfig[status as keyof typeof statusConfig].label,
+        value: status,
+      })),
     },
     {
       title: "สถานะ",
       dataIndex: "status",
       key: "status",
-      width: 130,
+
       render: (status: string) => {
         const config = statusConfig[status as keyof typeof statusConfig];
         return <Tag color={config.color}>{config.label}</Tag>;
       },
     },
     {
+      title: "ทีมงาน",
+      dataIndex: "team_members",
+      key: "team_members",
+
+      render: (teamMembers: string[], record) =>
+        renderTeamMembers(teamMembers, record.team_details),
+    },
+    {
       title: "วันที่เริ่ม",
       dataIndex: "start_date",
       key: "start_date",
-      width: 120,
+
       render: (date: string) => (date ? dayjs(date).format("DD/MM/YYYY") : "-"),
     },
     {
       title: "วันที่สิ้นสุด",
       dataIndex: "end_date",
       key: "end_date",
-      width: 120,
+
       render: (date: string) => (date ? dayjs(date).format("DD/MM/YYYY") : "-"),
     },
-
     {
       title: "การดำเนินการ",
       key: "actions",
-      width: 150,
+
       align: "center",
       render: (_, record) => (
         <Space size="small">
@@ -323,43 +430,53 @@ export default function AdminProjectPage() {
       breadcrumbs={[{ title: "Admin" }, { title: "จัดการโปรเจค" }]}
     >
       <div style={{ padding: 24 }}>
-        {/* สถิติภาพรวม */}
+        {/* Statistics Cards */}
         <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-          <Col xs={24} sm={12} lg={6}>
+          <Col xs={24} sm={12} lg={4}>
             <Card>
               <Statistic
-                title="โปรเจคทั้งหมด"
+                title="ทั้งหมด"
                 value={stats.totalProjects}
                 prefix={<BulbOutlined />}
-                valueStyle={{ color: "#3f8600" }}
+                valueStyle={{ color: "#1890ff" }}
               />
             </Card>
           </Col>
-          <Col xs={24} sm={12} lg={6}>
+          <Col xs={24} sm={12} lg={5}>
+            <Card>
+              <Statistic
+                title="รอดำเนินการ"
+                value={stats.todoProjects}
+                prefix={<ClockCircleOutlined />}
+                valueStyle={{ color: "#faad14" }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} lg={5}>
             <Card>
               <Statistic
                 title="กำลังดำเนินการ"
                 value={stats.inProgressProjects}
                 prefix={<ClockCircleOutlined />}
-                valueStyle={{ color: "#1890ff" }}
+                valueStyle={{ color: "#13c2c2" }}
               />
             </Card>
           </Col>
-          <Col xs={24} sm={12} lg={6}>
+          <Col xs={24} sm={12} lg={5}>
             <Card>
               <Statistic
-                title="สำเร็จแล้ว"
+                title="สำเร็จ"
                 value={stats.completedProjects}
                 prefix={<CheckCircleOutlined />}
                 valueStyle={{ color: "#52c41a" }}
               />
             </Card>
           </Col>
-          <Col xs={24} sm={12} lg={6}>
+          <Col xs={24} sm={12} lg={5}>
             <Card>
               <Statistic
-                title="ยกเลิก"
-                value={stats.cancelledProjects}
+                title="งบประมาณรวม"
+                value={totalBudget}
                 prefix={<ExclamationCircleOutlined />}
                 valueStyle={{ color: "#ff4d4f" }}
               />
@@ -451,7 +568,7 @@ export default function AdminProjectPage() {
             onShowSizeChange: handleTableChange,
             pageSizeOptions: ["10", "20", "50", "100"],
           }}
-          scroll={{ x: 1200 }}
+          scroll={{ x: 1400 }}
           size="middle"
         />
 
@@ -459,48 +576,113 @@ export default function AdminProjectPage() {
         <Modal
           title={editingProject ? "แก้ไขโปรเจค" : "เพิ่มโปรเจคใหม่"}
           open={modalVisible}
-          onOk={handleSubmit}
           onCancel={closeModal}
-          confirmLoading={loading}
-          width={600}
-          okText="บันทึก"
-          cancelText="ยกเลิก"
-        >
-          <Form form={form} layout="vertical" style={{ marginTop: 24 }}>
-            <Form.Item
-              name="name"
-              label="ชื่อโปรเจค"
-              rules={[{ required: true, message: "กรุณากรอกชื่อโปรเจค" }]}
+          footer={[
+            <Button key="cancel" onClick={closeModal}>
+              ยกเลิก
+            </Button>,
+            <Button
+              key="submit"
+              type="primary"
+              loading={loading}
+              onClick={handleSubmit}
             >
-              <Input placeholder="ชื่อโปรเจค" />
-            </Form.Item>
-
-            <Form.Item name="description" label="คำอธิบาย">
-              <TextArea rows={3} placeholder="คำอธิบายโปรเจค" />
-            </Form.Item>
-
-            <Form.Item name="status" label="สถานะ" initialValue="todo">
-              <Select>
-                {getUniqueStatuses().map((status) => (
-                  <Option key={status} value={status}>
-                    {statusConfig[status as keyof typeof statusConfig].label}
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
+              {editingProject ? "อัพเดท" : "เพิ่ม"}
+            </Button>,
+          ]}
+          width={800}
+          destroyOnClose
+        >
+          <Form form={form} layout="vertical" style={{ marginTop: 20 }}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="name"
+                  label="ชื่อโปรเจค"
+                  rules={[{ required: true, message: "กรุณากรอกชื่อโปรเจค" }]}
+                >
+                  <Input placeholder="กรอกชื่อโปรเจค" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="status"
+                  label="สถานะ"
+                  rules={[{ required: true, message: "กรุณาเลือกสถานะ" }]}
+                >
+                  <Select placeholder="เลือกสถานะ">
+                    {getUniqueStatuses().map((status) => (
+                      <Option key={status} value={status}>
+                        {
+                          statusConfig[status as keyof typeof statusConfig]
+                            .label
+                        }
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
 
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item name="start_date" label="วันที่เริ่ม">
-                  <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
+                  <DatePicker
+                    style={{ width: "100%" }}
+                    format="DD/MM/YYYY"
+                    placeholder="เลือกวันที่เริ่ม"
+                  />
                 </Form.Item>
               </Col>
               <Col span={12}>
                 <Form.Item name="end_date" label="วันที่สิ้นสุด">
-                  <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
+                  <DatePicker
+                    style={{ width: "100%" }}
+                    format="DD/MM/YYYY"
+                    placeholder="เลือกวันที่สิ้นสุด"
+                  />
                 </Form.Item>
               </Col>
             </Row>
+
+            <Form.Item name="description" label="คำอธิบาย">
+              <TextArea rows={4} placeholder="กรอกคำอธิบายโปรเจค" />
+            </Form.Item>
+            <Form.Item name="budget" label="งบประมาณ">
+              <Input rows={4} placeholder="กรอกงบประมาณโปรเจค" />
+            </Form.Item>
+
+            <Form.Item label="เลือกทีมงาน">
+              <Transfer
+                dataSource={transferData}
+                titles={["สมาชิกทั้งหมด", "สมาชิกในโปรเจค"]}
+                targetKeys={selectedTeamMembers}
+                onChange={handleTransferChange}
+                render={(item) => (
+                  <div>
+                    <div style={{ fontWeight: "bold" }}>{item.title}</div>
+                    <div style={{ fontSize: "12px", color: "#666" }}>
+                      {item.description}
+                    </div>
+                  </div>
+                )}
+                showSearch
+                searchPlaceholder="ค้นหาสมาชิก"
+                filterOption={(inputValue, option) =>
+                  option.title
+                    .toLowerCase()
+                    .includes(inputValue.toLowerCase()) ||
+                  option.description
+                    .toLowerCase()
+                    .includes(inputValue.toLowerCase())
+                }
+                style={{ width: "100%" }}
+                listStyle={{
+                  width: "45%",
+                  height: 300,
+                }}
+              />
+            </Form.Item>
           </Form>
         </Modal>
 
@@ -546,6 +728,9 @@ export default function AdminProjectPage() {
                   }
                 </Tag>
               </Descriptions.Item>
+              <Descriptions.Item label="จำนวนทีมงาน">
+                <Text>{viewingProject.team_members?.length || 0} คน</Text>
+              </Descriptions.Item>
               <Descriptions.Item label="วันที่เริ่ม">
                 {viewingProject.start_date
                   ? dayjs(viewingProject.start_date).format("DD/MM/YYYY")
@@ -564,6 +749,33 @@ export default function AdminProjectPage() {
               </Descriptions.Item>
               <Descriptions.Item label="คำอธิบาย" span={2}>
                 {viewingProject.description || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="งบประมาณ" span={2}>
+                {viewingProject.bugget || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="ทีมงาน" span={2}>
+                {viewingProject.team_details &&
+                viewingProject.team_details.length > 0 ? (
+                  <div>
+                    {viewingProject.team_details.map((member) => (
+                      <div key={member.id} style={{ marginBottom: 8 }}>
+                        <Space>
+                          <Avatar
+                            src={member.avatar_url}
+                            icon={<UserOutlined />}
+                            size="small"
+                          />
+                          <Text strong>{member.name}</Text>
+                          <Tag color="blue" size="small">
+                            {member.position}
+                          </Tag>
+                        </Space>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Text type="secondary">ยังไม่มีทีมงาน</Text>
+                )}
               </Descriptions.Item>
             </Descriptions>
           )}

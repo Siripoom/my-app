@@ -7,8 +7,10 @@ export interface Project {
   start_date?: string;
   end_date?: string;
   status: "todo" | "in_progress" | "completed" | "cancelled";
+  team_members?: string[]; // Array of team member UUIDs
   created_at?: string;
   updated_at?: string;
+  budget?: number; // Optional budget field
 }
 
 export interface ProjectFilters {
@@ -26,10 +28,21 @@ export interface ProjectStats {
   cancelledProjects: number;
 }
 
-// ดึงข้อมูล Projects ทั้งหมดพร้อม Filter
+export interface ProjectWithTeamDetails extends Project {
+  team_details?: Array<{
+    id: string;
+    name: string;
+    position: string;
+    avatar_url?: string;
+  }>;
+}
+
+// ดึงข้อมูล Projects ทั้งหมดพร้อม Filter และข้อมูลทีม
 export const getProjects = async (filters: ProjectFilters = {}) => {
   try {
     const { search, status, page = 1, limit = 10 } = filters;
+
+    // First, get projects without join
     let query = supabase
       .from("projects")
       .select("*", { count: "exact" })
@@ -50,12 +63,45 @@ export const getProjects = async (filters: ProjectFilters = {}) => {
     const to = from + limit - 1;
     query = query.range(from, to);
 
-    const { data, error, count } = await query;
+    const { data: projects, error, count } = await query;
 
     if (error) throw error;
 
+    // Now fetch team details for each project that has team members
+    const projectsWithTeamDetails = await Promise.all(
+      (projects || []).map(async (project) => {
+        if (project.team_members && project.team_members.length > 0) {
+          try {
+            // Get team details for this project
+            const { data: teamData, error: teamError } = await supabase
+              .from("teams")
+              .select("id, name, position, avatar_url")
+              .in("id", project.team_members);
+
+            if (!teamError && teamData) {
+              return {
+                ...project,
+                team_details: teamData,
+              };
+            }
+          } catch (teamError) {
+            console.error(
+              "Error fetching team details for project:",
+              project.id,
+              teamError
+            );
+          }
+        }
+
+        return {
+          ...project,
+          team_details: [],
+        };
+      })
+    );
+
     return {
-      data: data || [],
+      data: projectsWithTeamDetails || [],
       count: count || 0,
       totalPages: Math.ceil((count || 0) / limit),
       currentPage: page,
@@ -66,8 +112,10 @@ export const getProjects = async (filters: ProjectFilters = {}) => {
   }
 };
 
-// ดึงข้อมูล Project ตาม ID
-export const getProjectById = async (id: string): Promise<Project | null> => {
+// ดึงข้อมูล Project ตาม ID พร้อมข้อมูลทีม
+export const getProjectById = async (
+  id: string
+): Promise<ProjectWithTeamDetails | null> => {
   try {
     const { data, error } = await supabase
       .from("projects")
@@ -76,7 +124,26 @@ export const getProjectById = async (id: string): Promise<Project | null> => {
       .single();
 
     if (error) throw error;
-    return data;
+
+    if (data && data.team_members && data.team_members.length > 0) {
+      // Get team details
+      const { data: teamData, error: teamError } = await supabase
+        .from("teams")
+        .select("id, name, position, avatar_url")
+        .in("id", data.team_members);
+
+      if (!teamError && teamData) {
+        return {
+          ...data,
+          team_details: teamData,
+        };
+      }
+    }
+
+    return {
+      ...data,
+      team_details: [],
+    };
   } catch (error) {
     console.error("Error fetching project:", error);
     throw error;
@@ -129,6 +196,102 @@ export const deleteProject = async (id: string) => {
     return true;
   } catch (error) {
     console.error("Error deleting project:", error);
+    throw error;
+  }
+};
+
+// เพิ่มสมาชิกทีมในโปรเจค
+export const addTeamMemberToProject = async (
+  projectId: string,
+  memberId: string
+) => {
+  try {
+    // Get current project
+    const { data: project, error: fetchError } = await supabase
+      .from("projects")
+      .select("team_members")
+      .eq("id", projectId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const currentMembers = project.team_members || [];
+
+    // Check if member already exists
+    if (currentMembers.includes(memberId)) {
+      throw new Error("สมาชิกนี้ได้ถูกเพิ่มในโปรเจคแล้ว");
+    }
+
+    // Add new member
+    const updatedMembers = [...currentMembers, memberId];
+
+    const { data, error } = await supabase
+      .from("projects")
+      .update({ team_members: updatedMembers })
+      .eq("id", projectId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error("Error adding team member to project:", error);
+    throw error;
+  }
+};
+
+// ลบสมาชิกทีมออกจากโปรเจค
+export const removeTeamMemberFromProject = async (
+  projectId: string,
+  memberId: string
+) => {
+  try {
+    // Get current project
+    const { data: project, error: fetchError } = await supabase
+      .from("projects")
+      .select("team_members")
+      .eq("id", projectId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const currentMembers = project.team_members || [];
+
+    // Remove member
+    const updatedMembers = currentMembers.filter((id) => id !== memberId);
+
+    const { data, error } = await supabase
+      .from("projects")
+      .update({ team_members: updatedMembers })
+      .eq("id", projectId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error("Error removing team member from project:", error);
+    throw error;
+  }
+};
+
+// อัพเดทสมาชิกทีมทั้งหมดในโปรเจค
+export const updateProjectTeamMembers = async (
+  projectId: string,
+  memberIds: string[]
+) => {
+  try {
+    const { data, error } = await supabase
+      .from("projects")
+      .update({ team_members: memberIds })
+      .eq("id", projectId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error("Error updating project team members:", error);
     throw error;
   }
 };
