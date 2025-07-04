@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Form, Input, Button, message, Spin, Alert, Card, Avatar, Upload, Row, Col, Typography, Divider } from "antd";
-import { UserOutlined, MailOutlined, EditOutlined, UploadOutlined, GithubOutlined, LinkedinOutlined, BankOutlined } from "@ant-design/icons";
+import { UserOutlined, MailOutlined, EditOutlined, UploadOutlined, GithubOutlined, LinkedinOutlined, BankOutlined, PlusOutlined } from "@ant-design/icons";
 import { supabase } from "@/config/supabase";
 import { updateUserProfile, uploadAvatar, deleteAvatar, UserProfile } from "@/services/userService"; // สมมติว่าฟังก์ชันเหล่านี้อยู่ใน userService
 import type { UploadFile, UploadProps } from "antd/es/upload";
