@@ -167,30 +167,44 @@ export const deleteFinance = async (id: string) => {
 };
 
 // ดึงสถิติ Finances
-export const getFinanceStats = async (): Promise<FinanceStats> => {
+// ✨✨✨ ส่วนที่แก้ไข: getFinanceStats ✨✨✨
+/**
+ * ดึงสถิติ Finances ตามช่วงเวลาที่กำหนด
+ * @param startDate - วันที่เริ่มต้น (YYYY-MM-DD)
+ * @param endDate - วันที่สิ้นสุด (YYYY-MM-DD)
+ */
+export const getFinanceStats = async (startDate?: string, endDate?: string): Promise<FinanceStats> => {
   try {
-    // ดึงข้อมูลสรุปทั้งหมด
-    const { data: allData, error: allError } = await supabase
-      .from("finances")
-      .select("amount, type");
+    // 1. สร้าง query เริ่มต้น
+    let query = supabase.from("finances").select("amount, type, transaction_date");
 
-    if (allError) throw allError;
+    // 2. เพิ่มเงื่อนไขการกรองตามช่วงวันที่ ถ้ามีการส่งค่ามา
+    if (startDate) {
+      query = query.gte("transaction_date", startDate);
+    }
+    if (endDate) {
+      query = query.lte("transaction_date", endDate);
+    }
 
-    // ดึงข้อมูลรายเดือน
+    // 3. ดึงข้อมูลที่กรองแล้ว
+    const { data: filteredData, error: filteredError } = await query;
+    if (filteredError) throw filteredError;
+
+    // 4. ดึงข้อมูลรายเดือน (ส่วนนี้ยังคงดึงข้อมูลสรุปทั้งหมด 12 เดือนล่าสุดจาก View)
     const { data: monthlyData, error: monthlyError } = await supabase
       .from("finance_summary")
       .select("*")
       .order("month", { ascending: false })
       .limit(12);
-
     if (monthlyError) throw monthlyError;
 
+    // 5. คำนวณสถิติจากข้อมูลที่กรองแล้ว (filteredData)
     const totalIncome =
-      allData
+      filteredData
         ?.filter((f) => f.type === "income")
         .reduce((sum, f) => sum + f.amount, 0) || 0;
     const totalExpense =
-      allData
+      filteredData
         ?.filter((f) => f.type === "expense")
         .reduce((sum, f) => sum + f.amount, 0) || 0;
 
@@ -198,14 +212,21 @@ export const getFinanceStats = async (): Promise<FinanceStats> => {
       totalIncome,
       totalExpense,
       netAmount: totalIncome - totalExpense,
-      totalTransactions: allData?.length || 0,
+      totalTransactions: filteredData?.length || 0,
       monthlyData: monthlyData || [],
     };
 
     return stats;
   } catch (error) {
     console.error("Error fetching finance stats:", error);
-    throw error;
+    // คืนค่า default ถ้าเกิด error
+    return {
+      totalIncome: 0,
+      totalExpense: 0,
+      netAmount: 0,
+      totalTransactions: 0,
+      monthlyData: [],
+    };
   }
 };
 

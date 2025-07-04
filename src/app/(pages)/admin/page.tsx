@@ -1,140 +1,134 @@
-// src/app/(pages)/admin/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
-import { Row, Col, Card, Statistic, Table, Tag, Avatar } from "antd";
-import {
-  TeamOutlined,
-  UserOutlined,
-  RiseOutlined,
-  ClockCircleOutlined,
-} from "@ant-design/icons";
+import { useState, useEffect, useCallback } from "react";
+import { Row, Col, Card, Statistic, Typography, Spin, Alert, List, Tag, Avatar, Space, Tooltip, Empty } from "antd";
+import { TeamOutlined, BulbOutlined, BankOutlined, RiseOutlined, FallOutlined, ClockCircleOutlined } from "@ant-design/icons";
+import { Pie, Column } from '@ant-design/charts'; // ✨ Import กราฟ
 import AdminLayout from "@/components/AdminLayout";
-import { getTeams, Team } from "@/services/teamService";
+import { getProjectStats, getUpcomingDeadlines, Project } from "@/services/projectService";
+import { getUsers } from "@/services/userService";
+import { getFinanceStats } from "@/services/financeService";
+import dayjs from "dayjs";
+import relativeTime from 'dayjs/plugin/relativeTime';
+import 'dayjs/locale/th';
 
-export default function AdminDashboard() {
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState({
-    totalTeams: 0,
-    totalPositions: 0,
-    recentTeams: 0,
-  });
+// ตั้งค่า dayjs ให้ใช้งาน plugin และภาษาไทย
+dayjs.extend(relativeTime);
+dayjs.locale('th');
+// -------------------
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
+const { Title, Text } = Typography;
 
-  const loadDashboardData = async () => {
+// --- Main Dashboard Component ---
+export default function AdminDashboardPage() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // States for data
+  const [projectStats, setProjectStats] = useState<any>({});
+  const [userCount, setUserCount] = useState(0);
+  const [financeStats, setFinanceStats] = useState<any>({});
+  const [upcomingDeadlines, setUpcomingDeadlines] = useState<Project[]>([]);
+
+  const loadDashboardData = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await getTeams({ limit: 5 });
-      setTeams(result.data);
-
-      // Calculate stats
-      const positions = new Set(result.data.map((team) => team.position));
-      const recentTeams = result.data.filter((team) => {
-        const createdAt = new Date(team.created_at!);
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        return createdAt > weekAgo;
-      }).length;
-
-      setStats({
-        totalTeams: result.count,
-        totalPositions: positions.size,
-        recentTeams,
-      });
-    } catch (error) {
-      console.error("Error loading dashboard data:", error);
+      const [pStats, usersResult, fStats, deadlines] = await Promise.all([
+        getProjectStats(),
+        getUsers({ limit: 1 }), // ดึงแค่ count
+        getFinanceStats(),
+        getUpcomingDeadlines(14) // ดึง deadline ใน 14 วัน
+      ]);
+      setProjectStats(pStats);
+      setUserCount(usersResult.count);
+      setFinanceStats(fStats);
+      setUpcomingDeadlines(deadlines);
+    } catch (err) {
+      console.error(err);
+      setError("เกิดข้อผิดพลาดในการโหลดข้อมูลแดชบอร์ด");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const recentTeamsColumns = [
-    {
-      title: "รูปภาพ",
-      dataIndex: "avatar_url",
-      key: "avatar_url",
-      width: 60,
-      render: (url: string) => (
-        <Avatar src={url} size={32} icon={<UserOutlined />} />
-      ),
-    },
-    {
-      title: "ชื่อ",
-      dataIndex: "name",
-      key: "name",
-    },
-    {
-      title: "ตำแหน่ง",
-      dataIndex: "position",
-      key: "position",
-      render: (position: string) => <Tag color="blue">{position}</Tag>,
-    },
-    {
-      title: "วันที่เพิ่ม",
-      dataIndex: "created_at",
-      key: "created_at",
-      render: (date: string) => new Date(date).toLocaleDateString("th-TH"),
-    },
-  ];
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  if (loading) {
+    return <AdminLayout><div className="flex justify-center items-center h-full"><Spin size="large" /></div></AdminLayout>;
+  }
+  if (error) {
+    return <AdminLayout><div className="p-8"><Alert message={error} type="error" showIcon /></div></AdminLayout>;
+  }
+
+  // --- Data for Charts ---
+  const projectStatusData = [
+    { type: 'รอดำเนินการ', value: projectStats.todoProjects || 0 },
+    { type: 'กำลังทำ', value: projectStats.inProgressProjects || 0 },
+    { type: 'สำเร็จ', value: projectStats.completedProjects || 0 },
+    { type: 'ยกเลิก', value: projectStats.cancelledProjects || 0 },
+  ].filter(item => item.value > 0);
+
+  const monthlyFinanceData = financeStats.monthlyData?.slice(0, 6).reverse().map((d: any) => ({
+    month: dayjs(d.month).format('MMM'),
+    value: d.total_income,
+    type: 'รายรับ',
+  })).concat(financeStats.monthlyData?.slice(0, 6).reverse().map((d: any) => ({
+    month: dayjs(d.month).format('MMM'),
+    value: d.total_expense,
+    type: 'รายจ่าย',
+  }))) || [];
+
+  // --- Chart Configs ---
+  const pieConfig = { data: projectStatusData, angleField: 'value', colorField: 'type', radius: 0.8, label: { text: 'value', style: { fontSize: 14 } }, legend: { color: { title: false, position: 'right', rowPadding: 5 } } };
+  const columnConfig = { data: monthlyFinanceData, xField: 'month', yField: 'value', colorField: 'type', group: true, color: ['#52c41a', '#ff4d4f'] };
 
   return (
-    <AdminLayout
-      title="แดชบอร์ด"
-      breadcrumbs={[{ title: "Admin" }, { title: "แดชบอร์ด" }]}
-    >
+    <AdminLayout title="แผงควบคุมหลัก (Dashboard)">
       <div style={{ padding: 24 }}>
-        {/* สถิติภาพรวม */}
+        {/* --- KPI Cards --- */}
         <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-          <Col xs={24} sm={12} lg={8}>
-            <Card>
-              <Statistic
-                title="จำนวนทีมทั้งหมด"
-                value={stats.totalTeams}
-                prefix={<TeamOutlined />}
-                valueStyle={{ color: "#3f8600" }}
-              />
-            </Card>
+          <Col xs={24} sm={12} md={6}><Card bordered={false}><Statistic title="โปรเจคทั้งหมด" value={projectStats.totalProjects} prefix={<BulbOutlined />} /></Card></Col>
+          <Col xs={24} sm={12} md={6}><Card bordered={false}><Statistic title="ทีมงานทั้งหมด" value={userCount} prefix={<TeamOutlined />} /></Card></Col>
+          <Col xs={24} sm={12} md={6}><Card bordered={false}><Statistic title="รายรับเดือนนี้" value={financeStats.totalIncome} prefix={<RiseOutlined />} precision={2} suffix="฿" valueStyle={{ color: '#52c41a' }} /></Card></Col>
+          <Col xs={24} sm={12} md={6}><Card bordered={false}><Statistic title="รายจ่ายเดือนนี้" value={financeStats.totalExpense} prefix={<FallOutlined />} precision={2} suffix="฿" valueStyle={{ color: '#ff4d4f' }} /></Card></Col>
+        </Row>
+
+        <Row gutter={[24, 24]}>
+          {/* --- Left Column: Projects & Finance --- */}
+          <Col xs={24} lg={16}>
+            <Space direction="vertical" size="large" style={{ width: '100%' }}>
+              <Card title="ภาพรวมสถานะโปรเจค">
+                {projectStatusData.length > 0 ? <Pie {...pieConfig} height={250} /> : <Empty description="ไม่มีข้อมูลโปรเจค" />}
+              </Card>
+              <Card title="สรุปการเงิน 6 เดือนล่าสุด">
+                {monthlyFinanceData.length > 0 ? <Column {...columnConfig} height={250} /> : <Empty description="ไม่มีข้อมูลการเงิน" />}
+              </Card>
+            </Space>
           </Col>
-          <Col xs={24} sm={12} lg={8}>
-            <Card>
-              <Statistic
-                title="ตำแหน่งงาน"
-                value={stats.totalPositions}
-                prefix={<UserOutlined />}
-                valueStyle={{ color: "#1890ff" }}
-              />
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} lg={8}>
-            <Card>
-              <Statistic
-                title="เพิ่มใหม่ (7 วันล่าสุด)"
-                value={stats.recentTeams}
-                prefix={<RiseOutlined />}
-                valueStyle={{ color: "#cf1322" }}
-              />
+
+          {/* --- Right Column: Upcoming Deadlines --- */}
+          <Col xs={24} lg={8}>
+            <Card title="โปรเจคใกล้ครบกำหนด (14 วัน)">
+              {upcomingDeadlines.length > 0 ? (
+                <List
+                  itemLayout="horizontal"
+                  dataSource={upcomingDeadlines}
+                  renderItem={item => (
+                    <List.Item>
+                      <List.Item.Meta
+                        avatar={<Avatar icon={<ClockCircleOutlined />} style={{ backgroundColor: '#faad14' }} />}
+                        title={<a href={`/admin/projects/${item.id}`}>{item.name}</a>}
+                        description={`ครบกำหนด: ${dayjs(item.end_date).format('DD MMM YYYY')} (${dayjs(item.end_date).fromNow()})`}
+                      />
+                    </List.Item>
+                  )}
+                />
+              ) : <Empty description="ไม่มีโปรเจคใกล้ครบกำหนด" />}
             </Card>
           </Col>
         </Row>
-
-        {/* ทีมล่าสุด */}
-        <Card
-          title="ทีมล่าสุด"
-          extra={<ClockCircleOutlined style={{ color: "#1890ff" }} />}
-        >
-          <Table
-            columns={recentTeamsColumns}
-            dataSource={teams}
-            rowKey="id"
-            loading={loading}
-            pagination={false}
-            size="small"
-          />
-        </Card>
       </div>
     </AdminLayout>
   );

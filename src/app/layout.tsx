@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { AntdRegistry } from "@ant-design/nextjs-registry";
 import { ConditionalNavbar } from "@/components";
 import "./globals.css";
+import { AuthProvider } from "@/contexts/AuthContext"; // 1. Import (ถูกต้องอยู่แล้ว)
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,12 +30,15 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AntdRegistry>
-          <div className="min-h-screen bg-gray-50">
-            <ConditionalNavbar />
-            <main>{children}</main>
-          </div>
-        </AntdRegistry>
+        {/* ✨ 2. นำ AuthProvider มาห่อหุ้มทุกอย่างที่ต้องการข้อมูลผู้ใช้ ✨ */}
+        <AuthProvider>
+          <AntdRegistry>
+            <div className="min-h-screen bg-gray-50">
+              <ConditionalNavbar />
+              <main>{children}</main>
+            </div>
+          </AntdRegistry>
+        </AuthProvider>
       </body>
     </html>
   );
