@@ -25,6 +25,7 @@ import {
   Transfer,
   Upload,
   UploadFile,
+  UploadProps,
 } from "antd";
 import {
   PlusOutlined,
