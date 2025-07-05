@@ -11,7 +11,7 @@ export interface Project {
   created_at?: string;
   updated_at?: string;
   budget?: number; // Optional budget field
-  attachment_url?: string; // 
+  attachment_url?: string; //
 }
 
 export interface ProjectFilters {
@@ -35,26 +35,29 @@ export interface ProjectWithTeamDetails extends Project {
   team_details?: Array<{
     id: string;
     full_name: string; // ✨ เปลี่ยนจาก name เป็น full_name
-    role: string;      // ✨ เปลี่ยนจาก position เป็น role (หรือตามชื่อคอลัมน์ใน teams)
+    role: string; // ✨ เปลี่ยนจาก position เป็น role (หรือตามชื่อคอลัมน์ใน teams)
     avatar_url?: string;
   }>;
 }
 
 function sanitizeFileName(fileName: string): string {
-  const name = fileName.split('.').slice(0, -1).join('.');
-  const extension = fileName.split('.').pop() || '';
+  const name = fileName.split(".").slice(0, -1).join(".");
+  const extension = fileName.split(".").pop() || "";
 
   // แทนที่ตัวอักษรที่ไม่ใช่ภาษาอังกฤษ/ตัวเลข ด้วยขีดกลาง (-)
   // และแปลงเป็นตัวพิมพ์เล็กทั้งหมด
   const sanitizedName = name
     .toLowerCase()
-    .replace(/[^a-z0-9]/g, '-') // แทนที่อักขระที่ไม่ต้องการ
-    .replace(/-+/g, '-'); // ลดขีดกลางที่ติดกันให้เหลือตัวเดียว
+    .replace(/[^a-z0-9]/g, "-") // แทนที่อักขระที่ไม่ต้องการ
+    .replace(/-+/g, "-"); // ลดขีดกลางที่ติดกันให้เหลือตัวเดียว
 
   return `${sanitizedName}-${Date.now()}.${extension}`;
 }
 
-export const uploadProjectAttachment = async (file: File, projectId: string) => {
+export const uploadProjectAttachment = async (
+  file: File,
+  projectId: string
+) => {
   // ✨✨✨ แก้ไขส่วนนี้ ✨✨✨
   const sanitizedName = sanitizeFileName(file.name);
   const filePath = `public/${projectId}/${sanitizedName}`;
@@ -67,9 +70,9 @@ export const uploadProjectAttachment = async (file: File, projectId: string) => 
 
   if (error) throw error;
 
-  const { data: { publicUrl } } = supabase.storage
-    .from("project-attachments")
-    .getPublicUrl(data.path);
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from("project-attachments").getPublicUrl(data.path);
 
   return publicUrl;
 };
@@ -79,7 +82,7 @@ export const uploadProjectAttachment = async (file: File, projectId: string) => 
  */
 export const deleteProjectAttachment = async (attachmentUrl: string) => {
   try {
-    const filePath = attachmentUrl.split('/project-attachments/')[1];
+    const filePath = attachmentUrl.split("/project-attachments/")[1];
     if (!filePath) return;
     await supabase.storage.from("project-attachments").remove([filePath]);
   } catch (error) {
@@ -111,10 +114,9 @@ export const getProjects = async (filters: ProjectFilters = {}) => {
     // ✨✨✨ ส่วนที่เพิ่มเข้ามา ✨✨✨
     // ถ้ามีการส่ง userId มา (จากหน้า Home ของ User) ให้กรองเฉพาะโปรเจคของ User นั้น
     if (userId) {
-      query = query.contains('team_members', [userId]);
+      query = query.contains("team_members", [userId]);
     }
     // ถ้าไม่มีการส่ง userId มา (จากหน้า Admin) ก็จะไม่ทำอะไร ซึ่งจะดึงมาทั้งหมด (ถูกต้องแล้ว)
-
 
     // Pagination
     const from = (page - 1) * limit;
@@ -144,7 +146,11 @@ export const getProjects = async (filters: ProjectFilters = {}) => {
               };
             }
           } catch (teamError) {
-            console.error("Error fetching team details for project:", project.id, teamError);
+            console.error(
+              "Error fetching team details for project:",
+              project.id,
+              teamError
+            );
           }
         }
 
@@ -166,7 +172,6 @@ export const getProjects = async (filters: ProjectFilters = {}) => {
     throw error;
   }
 };
-
 
 // ✨✨✨ ดึงข้อมูล Project ตาม ID (ฉบับแก้ไขให้สมบูรณ์) ✨✨✨
 export const getProjectById = async (
@@ -295,7 +300,7 @@ export const removeTeamMemberFromProject = async (
     const currentMembers = project.team_members || [];
 
     // Remove member
-    const updatedMembers = currentMembers.filter((id) => id !== memberId);
+    const updatedMembers = currentMembers.filter((id: any) => id !== memberId);
 
     const { data, error } = await supabase
       .from("projects")
