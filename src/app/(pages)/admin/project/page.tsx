@@ -43,6 +43,8 @@ import {
   PaperClipOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
+import type { TransferDirection } from "antd/es/transfer";
+import type { Key } from "react";
 import AdminLayout from "@/components/AdminLayout";
 import {
   getProjects,
@@ -217,12 +219,8 @@ export default function AdminProjectPage() {
   };
 
   // Handle team transfer
-  const handleTransferChange = (
-    targetKeys: string[],
-    _direction: string,
-    _moveKeys: string[]
-  ) => {
-    setSelectedTeamMembers(targetKeys);
+  const handleTransferChange = (targetKeys: Key[]) => {
+    setSelectedTeamMembers(targetKeys.map(String));
   };
 
   // Modal handlers
