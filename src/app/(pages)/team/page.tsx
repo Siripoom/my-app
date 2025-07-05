@@ -129,7 +129,6 @@ export default function TeamPage() {
                       onClick={() => handleViewDetail(member.id!)}
                       className="text-blue-600 hover:text-blue-800"
                     >
-                      ดูรายละเอียด
                     </Button>,
                     member.github_url && (
                       <Button
