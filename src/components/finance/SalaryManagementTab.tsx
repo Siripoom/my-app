@@ -403,8 +403,9 @@ const BulkPayModal = ({ visible, users, onCancel, onFinish }: any) => {
           period_start_date: values.period[0].format("YYYY-MM-DD"),
           period_end_date: values.period[1].format("YYYY-MM-DD"),
           notes: values.notes,
-          // ✨ อ่านค่าสถานะจาก Switch ของแต่ละคน (ถ้าไม่มีค่าให้ถือว่าเป็น 'paid')
-          status: userData.paid === false ? "pending" : ("paid" as const),
+          // ✨ ระบุชนิด status ให้ตรงกับ type
+          status:
+            userData.paid === false ? ("pending" as const) : ("paid" as const),
         }));
 
       if (salaryList.length === 0) {
