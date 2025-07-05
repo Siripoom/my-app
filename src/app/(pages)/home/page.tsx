@@ -135,7 +135,7 @@ export default function Home() {
         }
       >
         <Space direction="vertical" style={{ width: '100%' }}>
-          <Text type="secondary" ellipsis={{ rows: 2 }}>{project.description || 'ไม่มีคำอธิบาย'}</Text>
+          <Text type="secondary" ellipsis>{project.description || 'ไม่มีคำอธิบาย'}</Text>
           <Space>
             <Text strong>สถานะ:</Text>
             <Tag icon={config.icon} color={config.color}>{config.label}</Tag>
