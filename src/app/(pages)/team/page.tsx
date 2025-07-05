@@ -128,8 +128,7 @@ export default function TeamPage() {
                       icon={<EyeOutlined />}
                       onClick={() => handleViewDetail(member.id!)}
                       className="text-blue-600 hover:text-blue-800"
-                    >
-                    </Button>,
+                    ></Button>,
                     member.github_url && (
                       <Button
                         key="github"
@@ -193,16 +192,12 @@ export default function TeamPage() {
                                 {member.skills
                                   .slice(0, 3)
                                   .map((skill, index) => (
-                                    <Tag
-                                      key={index}
-                                      size="small"
-                                      color="geekblue"
-                                    >
+                                    <Tag key={index} color="geekblue">
                                       {skill}
                                     </Tag>
                                   ))}
                                 {member.skills.length > 3 && (
-                                  <Tag size="small" color="default">
+                                  <Tag color="default">
                                     +{member.skills.length - 3}
                                   </Tag>
                                 )}
