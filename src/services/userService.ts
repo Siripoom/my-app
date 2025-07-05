@@ -23,6 +23,7 @@ export interface UserProfile {
 // Interface สำหรับเงื่อนไขการกรองข้อมูลผู้ใช้
 export interface UserFilters {
   search?: string;
+  role?: string;
   position?: string;
   page?: number;
   limit?: number;
@@ -39,10 +40,13 @@ export const getUsers = async (filters: UserFilters = {}) => {
   try {
     const { search, role, position, page = 1, limit = 10 } = filters;
 
-    let query = supabase.from("teams").select("*", { count: "exact" }).order("created_at", { ascending: false });
+    let query = supabase
+      .from("teams")
+      .select("*", { count: "exact" })
+      .order("created_at", { ascending: false });
 
     if (search) {
-      query = query.ilike('full_name', `%${search}%`);
+      query = query.ilike("full_name", `%${search}%`);
     }
     // เพิ่มเงื่อนไขการกรอง
     if (role) {
@@ -70,7 +74,10 @@ export const getUsers = async (filters: UserFilters = {}) => {
  * @param id - User ID
  * @param profile - ข้อมูลที่ต้องการอัปเดต (เช่น full_name, role)
  */
-export const updateUserProfile = async (id: string, profile: Partial<UserProfile>) => {
+export const updateUserProfile = async (
+  id: string,
+  profile: Partial<UserProfile>
+) => {
   try {
     const { data, error } = await supabase
       .from("teams")
@@ -100,7 +107,7 @@ export const getUniqueRoles = async (): Promise<string[]> => {
     //   RETURN QUERY SELECT DISTINCT p.role FROM public.teams p WHERE p.role IS NOT NULL ORDER BY role;
     // END;
     // $$ LANGUAGE plpgsql;
-    const { data, error } = await supabase.rpc('get_unique_roles_from_teams');
+    const { data, error } = await supabase.rpc("get_unique_roles_from_teams");
 
     if (error) throw error;
     return data.map((item: any) => item.role);
@@ -120,11 +127,15 @@ export const getUniqueRoles = async (): Promise<string[]> => {
  */
 export const uploadAvatar = async (file: File, userId: string) => {
   const filePath = `avatars/${userId}/${Date.now()}`;
-  const { data, error } = await supabase.storage.from("avatars").upload(filePath, file);
+  const { data, error } = await supabase.storage
+    .from("avatars")
+    .upload(filePath, file);
 
   if (error) throw error;
 
-  const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(data.path);
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from("avatars").getPublicUrl(data.path);
   return publicUrl;
 };
 
@@ -145,15 +156,16 @@ export const deleteAvatar = async (avatarUrl: string) => {
   }
 };
 
-
 // --- Edge Function Calls (สำหรับ Admin Actions) ---
 
 /**
  * 6. เรียก Edge Function 'create-user' เพื่อสร้างผู้ใช้ใหม่ในระบบ
  * @param userData - อ็อบเจกต์ที่มี email, password, full_name, role
  */
-export const createUser = async (userData: Partial<UserProfile> & { password?: string }) => {
-  const { data, error } = await supabase.functions.invoke('create-user', {
+export const createUser = async (
+  userData: Partial<UserProfile> & { password?: string }
+) => {
+  const { data, error } = await supabase.functions.invoke("create-user", {
     body: userData,
   });
 
@@ -166,7 +178,7 @@ export const createUser = async (userData: Partial<UserProfile> & { password?: s
  * @param userId - User ID ที่ต้องการลบ
  */
 export const deleteUser = async (userId: string) => {
-  const { error } = await supabase.functions.invoke('delete-user', {
+  const { error } = await supabase.functions.invoke("delete-user", {
     body: { userId },
   });
 
