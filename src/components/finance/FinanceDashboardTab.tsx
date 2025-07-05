@@ -541,9 +541,7 @@ export default function FinanceDashboardTab() {
 
       {/* Create/Edit Modal */}
       <Modal
-        title={
-          editingFinance ? "แก้ไขข้อมูลการเงิน" : "เพิ่มข้อมูลการเงินใหม่"
-        }
+        title={editingFinance ? "แก้ไขข้อมูลการเงิน" : "เพิ่มข้อมูลการเงินใหม่"}
         open={modalVisible}
         onOk={handleSubmit}
         onCancel={closeModal}
@@ -597,8 +595,9 @@ export default function FinanceDashboardTab() {
                   formatter={(value) =>
                     `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                   }
-                  parser={(value) =>
-                    Number(value?.replace(/\$\s?|(,*)/g, ""))
+                  parser={
+                    ((value: string | undefined) =>
+                      Number(value?.replace(/\$\s?|(,*)/g, ""))) as any
                   }
                   placeholder="0.00"
                 />
