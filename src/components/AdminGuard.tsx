@@ -36,19 +36,7 @@ const AdminGuard = ({ children }: AdminGuardProps) => {
     return <>{children}</>;
   }
 
-  // ส่วนนี้จะแสดงแค่ชั่วคราวก่อนที่จะถูก redirect
-  return (
-    <Result
-      status="403"
-      title="403"
-      subTitle="ขออภัย, คุณไม่ได้รับอนุญาตให้เข้าถึงหน้านี้"
-      extra={
-        <Button type="primary" onClick={() => router.push('/')}>
-          กลับไปหน้าแรก
-        </Button>
-      }
-    />
-  );
+  return <Spin tip="กำลังโหลด.." size="large" fullscreen />;
 };
 
 export default AdminGuard;
